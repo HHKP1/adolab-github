@@ -1,0 +1,58 @@
+parameters:
+  - name: environmentName
+    type: string
+  - name: serviceConnection
+    type: string
+
+steps:
+- task: DownloadBuildArtifacts@1
+  displayName: 'Download Artifacts'
+  inputs:
+    artifactName: 'iac-terraform'
+    downloadPath: '$(System.DefaultWorkingDirectory)'
+
+- task: ExtractFiles@1
+  displayName: 'Extract Artifacts'
+  inputs:
+    archiveFilePatterns: '$(System.DefaultWorkingDirectory)/iac-terraform/iac.terraform.$(Build.BuildNumber).zip'
+    destinationFolder: '$(System.DefaultWorkingDirectory)/extracted'
+
+- task: TerraformInstaller@0
+  displayName: 'Install Terraform $(terraform_version)'
+  inputs:
+    terraformVersion: '$(terraform_version)'
+
+- task: TerraformTaskV2@2
+  displayName: 'Terraform Init'
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/extracted/terraform'
+    backendServiceArm: '${{ parameters.serviceConnection }}'
+    backendAzureRmResourceGroupName: '$(resource_group_name)'
+    backendAzureRmStorageAccountName: '$(storage_account_name)'
+    backendAzureRmContainerName: '$(container_name)'
+    backendAzureRmKey: '${{ parameters.environmentName }}.tfstate'
+
+- task: TerraformTaskV2@2
+  displayName: 'Terraform Plan'
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/extracted/terraform'
+    environmentServiceNameAzureRM: '${{ parameters.serviceConnection }}'
+    commandOptions: >-
+      -out=tfplan
+      -var="RESOURCE_NAME_PREFIX=$(RESOURCE_NAME_PREFIX)"
+      -var="LOCATION=$(LOCATION)"
+      -var="ENV=${{ parameters.environmentName }}"
+      -var="SQL_SERVER_ADMINISTRATOR_LOGIN=$(SQL_SERVER_ADMINISTRATOR_LOGIN)"
+      -var="SQL_SERVER_ADMINISTRATOR_PASSWORD=$(SQL_SERVER_ADMINISTRATOR_PASSWORD)"
+      -var="version=$(versionNumber)"
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Plan Artifacts'
+  inputs:
+    pathToPublish: '$(System.DefaultWorkingDirectory)/extracted'
+    artifactName: 'terraform-plan-${{ parameters.environmentName }}'
+    publishLocation: 'Container'

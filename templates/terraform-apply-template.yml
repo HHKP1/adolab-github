@@ -1,0 +1,41 @@
+parameters:
+  - name: environmentName
+    type: string
+  - name: serviceConnection
+    type: string
+
+steps:
+- task: DownloadBuildArtifacts@1
+  displayName: 'Download Plan Artifacts'
+  inputs:
+    artifactName: 'terraform-plan-${{ parameters.environmentName }}'
+    downloadPath: '$(Pipeline.Workspace)'
+
+- task: TerraformInstaller@0
+  displayName: 'Install Terraform $(terraform_version)'
+  inputs:
+    terraformVersion: '$(terraform_version)'
+
+- task: TerraformTaskV2@2
+  displayName: 'Terraform Apply'
+  inputs:
+    provider: 'azurerm'
+    command: 'apply'
+    workingDirectory: '$(Pipeline.Workspace)/terraform-plan-${{ parameters.environmentName }}/terraform'
+    environmentServiceNameAzureRM: '${{ parameters.serviceConnection }}'
+    commandOptions: 'tfplan'
+
+- task: PowerShell@2
+  displayName: 'Display Infrastructure URLs'
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "✅ Infrastructure deployed successfully for environment: ${{ parameters.environmentName }}" -ForegroundColor Green
+      Write-Host "🌐 App Service URL: https://app-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}.azurewebsites.net" -ForegroundColor Cyan
+      
+      if ("${{ parameters.environmentName }}" -eq "prod") {
+        Write-Host "🟢 Staging Slot URL: https://app-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-prod-staging.azurewebsites.net" -ForegroundColor Yellow
+      }
+      
+      Write-Host "🗄️ SQL Server: sql-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Magenta
+      Write-Host "💾 Database: sqldb-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Magenta

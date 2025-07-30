@@ -1,0 +1,283 @@
+name: 'Infra-CI-CD-$(Date:yyyy.MM.dd)$(Rev:.r)'
+
+parameters:
+  - name: agentPool
+    type: string
+    default: 'self-hosted-pool'
+    displayName: 'Agent Pool Selection'
+    values:
+      - self-hosted-pool
+      - windows-latest
+
+trigger:
+  branches:
+    include:
+      - feature/*
+      - bugfix/*
+      - hotfix/*
+      - develop
+      - main
+      - release/*
+  paths:
+    include:
+      - terraform/*
+      - scripts/*
+
+variables:
+  - group: tfstate-variables
+  - group: terraform-version
+  - name: isLongLivedBranch
+    value: $[ or(eq(variables['Build.SourceBranch'], 'refs/heads/develop'), eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')) ]
+  - name: versionNumber
+    value: $[ coalesce(replace(replace(variables['Build.SourceBranch'], 'refs/heads/release/', ''), 'refs/heads/', ''), '1.0.0') ]
+  - name: oldBuildNumber
+    value: $(Build.BuildNumber)
+
+stages:
+# ==========================================
+# BUILD STAGE - Validate and Create Artifacts
+# ==========================================
+- stage: Build
+  displayName: 'Build and Validate'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Infrastructure'
+    pool: ${{ parameters.agentPool }}
+    steps:
+    - task: PowerShell@2
+      displayName: 'Validate Commit Message'
+      inputs:
+        targetType: 'filePath'
+        filePath: 'scripts/validate-commit.ps1'
+        arguments: '-CommitMessage "$(Build.SourceVersionMessage)"'
+      condition: and(succeeded(), ne(variables['Build.SourceVersionMessage'], ''))
+
+    - task: PowerShell@2
+      displayName: 'Update Build Number'
+      inputs:
+        targetType: 'filePath'
+        filePath: 'scripts/update-build-number.ps1'
+        arguments: '-BuildId $(Build.BuildId)'
+
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform $(terraform_version)'
+      inputs:
+        terraformVersion: '$(terraform_version)'
+
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+        backendServiceArm: 'azure-subscription'
+        backendAzureRmResourceGroupName: '$(resource_group_name)'
+        backendAzureRmStorageAccountName: '$(storage_account_name)'
+        backendAzureRmContainerName: '$(container_name)'
+        backendAzureRmKey: 'build-validation.tfstate'
+
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform Format Check'
+      inputs:
+        provider: 'azurerm'
+        command: 'fmt'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+        commandOptions: '-check -recursive'
+
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform Validate'
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+
+    - task: CopyFiles@2
+      displayName: 'Copy Terraform Files to Artifact Staging'
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)/terraform'
+        Contents: '**'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)/terraform'
+        CleanTargetFolder: true
+      condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+
+    - task: CopyFiles@2
+      displayName: 'Copy Scripts to Artifact Staging'
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)/scripts'
+        Contents: '**'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)/scripts'
+      condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+
+    - task: ArchiveFiles@2
+      displayName: 'Create ZIP Archive'
+      inputs:
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/iac.terraform.$(Build.BuildNumber).zip'
+        replaceExistingArchive: true
+      condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifacts'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/iac.terraform.$(Build.BuildNumber).zip'
+        artifactName: 'iac-terraform'
+        publishLocation: 'Container'
+      condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+
+# ==========================================
+# DEV ENVIRONMENT
+# ==========================================
+- stage: Plan_DEV
+  displayName: 'Plan DEV'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - job: PlanJob
+    displayName: 'Terraform Plan DEV'
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: dev-variables
+    steps:
+    - template: templates/terraform-plan-template.yml
+      parameters:
+        environmentName: 'dev'
+        serviceConnection: 'azure-subscription'
+
+- stage: Apply_DEV
+  displayName: 'Apply DEV'
+  dependsOn: Plan_DEV
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - deployment: ApplyJob
+    displayName: 'Terraform Apply DEV'
+    environment: DEV
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: dev-variables
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: templates/terraform-apply-template.yml
+            parameters:
+              environmentName: 'dev'
+              serviceConnection: 'azure-subscription'
+
+# ==========================================
+# QA ENVIRONMENT
+# ==========================================
+- stage: Plan_QA
+  displayName: 'Plan QA'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - job: PlanJob
+    displayName: 'Terraform Plan QA'
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: qa-variables
+    steps:
+    - template: templates/terraform-plan-template.yml
+      parameters:
+        environmentName: 'qa'
+        serviceConnection: 'azure-subscription'
+
+- stage: Apply_QA
+  displayName: 'Apply QA'
+  dependsOn: Plan_QA
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - deployment: ApplyJob
+    displayName: 'Terraform Apply QA'
+    environment: QA
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: qa-variables
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: templates/terraform-apply-template.yml
+            parameters:
+              environmentName: 'qa'
+              serviceConnection: 'azure-subscription'
+
+# ==========================================
+# UAT ENVIRONMENT
+# ==========================================
+- stage: Plan_UAT
+  displayName: 'Plan UAT'
+  dependsOn: [Apply_DEV, Apply_QA]
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - job: PlanJob
+    displayName: 'Terraform Plan UAT'
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: uat-variables
+    steps:
+    - template: templates/terraform-plan-template.yml
+      parameters:
+        environmentName: 'uat'
+        serviceConnection: 'azure-subscription'
+
+- stage: Apply_UAT
+  displayName: 'Apply UAT'
+  dependsOn: Plan_UAT
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - deployment: ApplyJob
+    displayName: 'Terraform Apply UAT'
+    environment: UAT
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: uat-variables
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: templates/terraform-apply-template.yml
+            parameters:
+              environmentName: 'uat'
+              serviceConnection: 'azure-subscription'
+
+# ==========================================
+# PROD ENVIRONMENT
+# ==========================================
+- stage: Plan_PROD
+  displayName: 'Plan PROD'
+  dependsOn: Apply_UAT
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - job: PlanJob
+    displayName: 'Terraform Plan PROD'
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: prod-variables
+    steps:
+    - template: templates/terraform-plan-template.yml
+      parameters:
+        environmentName: 'prod'
+        serviceConnection: 'azure-subscription'
+
+- stage: Apply_PROD
+  displayName: 'Apply PROD'
+  dependsOn: Plan_PROD
+  condition: and(succeeded(), eq(variables.isLongLivedBranch, 'true'))
+  jobs:
+  - deployment: ApplyJob
+    displayName: 'Terraform Apply PROD'
+    environment: PROD
+    pool: ${{ parameters.agentPool }}
+    variables:
+      - group: prod-variables
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - template: templates/terraform-apply-template.yml
+            parameters:
+              environmentName: 'prod'
+              serviceConnection: 'azure-subscription'
