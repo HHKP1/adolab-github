@@ -62,15 +62,6 @@ stages:
         filePath: 'scripts/update-build-number.ps1'
         arguments: '-BuildId $(Build.BuildId)'
 
-    - task: PowerShell@2
-      displayName: 'Debug Authentication'
-      inputs:
-        targetType: 'inline'
-        script: |
-          Write-Host "Current user: $(whoami)"
-          Write-Host "Agent type: $(Agent.Type)"
-          Write-Host "Service connection: azure-subscription"
-
     - task: TerraformInstaller@0
       displayName: 'Install Terraform $(terraform_version)'
       inputs:
