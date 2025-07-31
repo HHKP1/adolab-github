@@ -59,22 +59,19 @@ stages:
         filePath: 'scripts/update-build-number.ps1'
         arguments: '-BuildId $(Build.BuildId)'
 
+    - task: PowerShell@2
+      displayName: 'Debug Authentication'
+      inputs:
+        targetType: 'inline'
+        script: |
+          Write-Host "Current user: $(whoami)"
+          Write-Host "Agent type: $(Agent.Type)"
+          Write-Host "Service connection: azure-subscription"
+
     - task: TerraformInstaller@0
       displayName: 'Install Terraform $(terraform_version)'
       inputs:
         terraformVersion: '$(terraform_version)'
-
-    - task: TerraformTaskV2@2
-      displayName: 'Terraform Init'
-      inputs:
-        provider: 'azurerm'
-        command: 'init'
-        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        backendServiceArm: 'azure-subscription'
-        backendAzureRmResourceGroupName: '$(resource_group_name)'
-        backendAzureRmStorageAccountName: '$(storage_account_name)'
-        backendAzureRmContainerName: '$(container_name)'
-        backendAzureRmKey: 'build-validation.tfstate'
 
     - task: TerraformTaskV2@2
       displayName: 'Terraform Format Check'
