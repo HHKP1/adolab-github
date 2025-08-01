@@ -65,6 +65,14 @@ stages:
         terraformVersion: '$(terraform_version)'
 
     - task: PowerShell@2
+      displayName: 'Terraform Init (CLI)'
+      inputs:
+        targetType: 'inline'
+        script: |
+          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
+          terraform init -input=false
+
+    - task: PowerShell@2
       displayName: 'Terraform Format Check'
       inputs:
         targetType: 'inline'
