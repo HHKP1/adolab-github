@@ -48,7 +48,7 @@ steps:
       -var="ENV=${{ parameters.environmentName }}"
       -var="SQL_SERVER_ADMINISTRATOR_LOGIN=$(SQL_SERVER_ADMINISTRATOR_LOGIN)"
       -var="SQL_SERVER_ADMINISTRATOR_PASSWORD=$(SQL_SERVER_ADMINISTRATOR_PASSWORD)"
-      -var="version=$(versionNumber)"
+      -var="app_version=$(versionNumber)"
 
 - task: PublishBuildArtifacts@1
   displayName: 'Publish Plan Artifacts'
