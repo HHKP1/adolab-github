@@ -64,20 +64,45 @@ stages:
       inputs:
         terraformVersion: '$(terraform_version)'
 
-    - task: TerraformTaskV2@2
+    - task: PowerShell@2
       displayName: 'Terraform Format Check'
       inputs:
-        provider: 'azurerm'
-        command: 'fmt'
+        targetType: 'inline'
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        commandOptions: '-check -recursive'
+        script: |
+          Write-Host "Running Terraform Format Check..." -ForegroundColor Yellow
+          
+          # Change to terraform directory
+          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
+          
+          # Run terraform fmt check
+          terraform fmt -check -recursive -diff
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Terraform formatting is correct" -ForegroundColor Green
+          } else {
+            Write-Host "❌ Terraform formatting issues found. Run 'terraform fmt -recursive' to fix." -ForegroundColor Red
+            exit 1
+          }
 
-    - task: TerraformTaskV2@2
+    - task: PowerShell@2
       displayName: 'Terraform Validate'
       inputs:
-        provider: 'azurerm'
-        command: 'validate'
+        targetType: 'inline'
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+        script: |
+          Write-Host "Running Terraform Validate..." -ForegroundColor Yellow
+          
+          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
+          
+          terraform validate
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Terraform validating is correct" -ForegroundColor Green
+          } else {
+            Write-Host "❌ Terraform validatting issues found. " -ForegroundColor Red
+            exit 1
+          }
 
     - task: CopyFiles@2
       displayName: 'Copy Terraform Files to Artifact Staging'
