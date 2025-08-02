@@ -13,7 +13,7 @@ steps:
     artifactName: 'terraform-plan-${{ parameters.environmentName }}'
     downloadPath: '$(Pipeline.Workspace)'
 
-- task: TerraformInstaller@0
+- task: TerraformInstaller@1
   displayName: 'Install Terraform $(terraform_version)'
   inputs:
     terraformVersion: '$(terraform_version)'
@@ -45,7 +45,7 @@ steps:
         exit 1
       }
 
-- task: TerraformTaskV2@2
+- task: TerraformTask@5
   displayName: 'Terraform Apply for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
@@ -54,7 +54,7 @@ steps:
     environmentServiceNameAzureRM: '${{ parameters.serviceConnection }}'
     commandOptions: 'tfplan'
 
-- task: TerraformTaskV2@2
+- task: TerraformTask@5
   displayName: 'Terraform Output for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
