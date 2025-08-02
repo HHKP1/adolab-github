@@ -89,21 +89,9 @@ stages:
     - task: TerraformTaskV2@2
       displayName: 'Terraform Validate'
       inputs:
-        targetType: 'inline'
+        provider: 'azurerm'
+        command: 'validate'
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        script: |
-          Write-Host "Running Terraform Validate..." -ForegroundColor Yellow
-          
-          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
-          
-          terraform validate
-          
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Terraform validating is correct" -ForegroundColor Green
-          } else {
-            Write-Host "❌ Terraform validatting issues found. " -ForegroundColor Red
-            exit 1
-          }
 
     - task: CopyFiles@2
       displayName: 'Copy Terraform Files to Artifact Staging'
