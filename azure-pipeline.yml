@@ -3,11 +3,12 @@ name: 'Infra-CI-CD-$(Date:yyyy.MM.dd)$(Rev:.r)'
 parameters:
   - name: agentPool
     type: string
-    default: 'self-hosted-pool'
+    default: 'self-hosted-pool'  # For your local testing
     displayName: 'Agent Pool Selection'
     values:
-      - self-hosted-pool
-      - windows-latest
+      - self-hosted-pool    # Your local machine
+      - windows-latest      # Microsoft-hosted Windows
+      - ubuntu-latest       # Microsoft-hosted Linux
 
 trigger:
   branches:
@@ -30,8 +31,6 @@ variables:
     value: $[ or(eq(variables['Build.SourceBranch'], 'refs/heads/develop'), eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')) ]
   - name: versionNumber
     value: $[ coalesce(replace(replace(variables['Build.SourceBranch'], 'refs/heads/release/', ''), 'refs/heads/', ''), '1.0.0') ]
-  - name: oldBuildNumber
-    value: $(Build.BuildNumber)
 
 stages:
 # ==========================================
@@ -42,7 +41,11 @@ stages:
   jobs:
   - job: BuildJob
     displayName: 'Build Infrastructure'
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     steps:
     - task: PowerShell@2
       displayName: 'Validate Commit Message'
@@ -64,53 +67,33 @@ stages:
       inputs:
         terraformVersion: '$(terraform_version)'
 
-    - task: PowerShell@2
-      displayName: 'Terraform Init (CLI)'
+    # Terraform validation with minimal backend config
+    - task: TerraformTaskV2@2
+      displayName: 'Terraform Init (Validation Only)'
       inputs:
-        targetType: 'inline'
-        script: |
-          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
-          terraform init -input=false
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+        backendServiceArm: 'azure-subscription'
+        backendAzureRmResourceGroupName: '$(resource_group_name)'
+        backendAzureRmStorageAccountName: '$(storage_account_name)'
+        backendAzureRmContainerName: '$(container_name)'
+        backendAzureRmKey: 'validation.tfstate'  # Temporary key for validation
 
-    - task: PowerShell@2
+    - task: TerraformTaskV2@2
       displayName: 'Terraform Format Check'
       inputs:
-        targetType: 'inline'
+        provider: 'azurerm'
+        command: 'fmt'
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        script: |
-          Write-Host "Running Terraform Format Check..." -ForegroundColor Yellow
-          
-          # Change to terraform directory
-          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
-          
-          # Run terraform fmt check
-          terraform fmt -check -recursive -diff
-          
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Terraform formatting is correct" -ForegroundColor Green
-          } else {
-            Write-Host "❌ Terraform formatting issues found. Run 'terraform fmt -recursive' to fix." -ForegroundColor Red
-            exit 1
-          }
+        commandOptions: '-check -recursive'
 
-    - task: PowerShell@2
+    - task: TerraformTaskV2@2
       displayName: 'Terraform Validate'
       inputs:
-        targetType: 'inline'
+        provider: 'azurerm'
+        command: 'validate'
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        script: |
-          Write-Host "Running Terraform Validate..." -ForegroundColor Yellow
-          
-          Set-Location "$(System.DefaultWorkingDirectory)/terraform"
-          
-          terraform validate
-          
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Terraform validating is correct" -ForegroundColor Green
-          } else {
-            Write-Host "❌ Terraform validatting issues found. " -ForegroundColor Red
-            exit 1
-          }
 
     - task: CopyFiles@2
       displayName: 'Copy Terraform Files to Artifact Staging'
@@ -157,7 +140,11 @@ stages:
   jobs:
   - job: PlanJob
     displayName: 'Terraform Plan DEV'
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: dev-variables
     steps:
@@ -165,6 +152,7 @@ stages:
       parameters:
         environmentName: 'dev'
         serviceConnection: 'azure-subscription'
+        agentPool: ${{ parameters.agentPool }}
 
 - stage: Apply_DEV
   displayName: 'Apply DEV'
@@ -174,7 +162,11 @@ stages:
   - deployment: ApplyJob
     displayName: 'Terraform Apply DEV'
     environment: DEV
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: dev-variables
     strategy:
@@ -185,6 +177,7 @@ stages:
             parameters:
               environmentName: 'dev'
               serviceConnection: 'azure-subscription'
+              agentPool: ${{ parameters.agentPool }}
 
 # ==========================================
 # QA ENVIRONMENT
@@ -196,7 +189,11 @@ stages:
   jobs:
   - job: PlanJob
     displayName: 'Terraform Plan QA'
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: qa-variables
     steps:
@@ -204,6 +201,7 @@ stages:
       parameters:
         environmentName: 'qa'
         serviceConnection: 'azure-subscription'
+        agentPool: ${{ parameters.agentPool }}
 
 - stage: Apply_QA
   displayName: 'Apply QA'
@@ -213,7 +211,11 @@ stages:
   - deployment: ApplyJob
     displayName: 'Terraform Apply QA'
     environment: QA
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: qa-variables
     strategy:
@@ -224,6 +226,7 @@ stages:
             parameters:
               environmentName: 'qa'
               serviceConnection: 'azure-subscription'
+              agentPool: ${{ parameters.agentPool }}
 
 # ==========================================
 # UAT ENVIRONMENT
@@ -235,7 +238,11 @@ stages:
   jobs:
   - job: PlanJob
     displayName: 'Terraform Plan UAT'
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: uat-variables
     steps:
@@ -243,6 +250,7 @@ stages:
       parameters:
         environmentName: 'uat'
         serviceConnection: 'azure-subscription'
+        agentPool: ${{ parameters.agentPool }}
 
 - stage: Apply_UAT
   displayName: 'Apply UAT'
@@ -252,7 +260,11 @@ stages:
   - deployment: ApplyJob
     displayName: 'Terraform Apply UAT'
     environment: UAT
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: uat-variables
     strategy:
@@ -263,6 +275,7 @@ stages:
             parameters:
               environmentName: 'uat'
               serviceConnection: 'azure-subscription'
+              agentPool: ${{ parameters.agentPool }}
 
 # ==========================================
 # PROD ENVIRONMENT
@@ -274,7 +287,11 @@ stages:
   jobs:
   - job: PlanJob
     displayName: 'Terraform Plan PROD'
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: prod-variables
     steps:
@@ -282,6 +299,7 @@ stages:
       parameters:
         environmentName: 'prod'
         serviceConnection: 'azure-subscription'
+        agentPool: ${{ parameters.agentPool }}
 
 - stage: Apply_PROD
   displayName: 'Apply PROD'
@@ -291,7 +309,11 @@ stages:
   - deployment: ApplyJob
     displayName: 'Terraform Apply PROD'
     environment: PROD
-    pool: ${{ parameters.agentPool }}
+    pool: 
+      ${{ if eq(parameters.agentPool, 'self-hosted-pool') }}:
+        name: ${{ parameters.agentPool }}
+      ${{ else }}:
+        vmImage: ${{ parameters.agentPool }}
     variables:
       - group: prod-variables
     strategy:
@@ -302,3 +324,4 @@ stages:
             parameters:
               environmentName: 'prod'
               serviceConnection: 'azure-subscription'
+              agentPool: ${{ parameters.agentPool }}
