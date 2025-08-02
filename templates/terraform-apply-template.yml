@@ -45,7 +45,7 @@ steps:
         exit 1
       }
 
-- task: TerraformTask@5
+- task: TerraformTaskV2@2
   displayName: 'Terraform Apply for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
@@ -54,7 +54,7 @@ steps:
     environmentServiceNameAzureRM: '${{ parameters.serviceConnection }}'
     commandOptions: 'tfplan'
 
-- task: TerraformTask@5
+- task: TerraformTaskV2@2
   displayName: 'Terraform Output for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'

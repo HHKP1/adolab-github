@@ -68,7 +68,7 @@ stages:
         terraformVersion: '$(terraform_version)'
 
     # Terraform validation with minimal backend config
-    - task: TerraformTask@5
+    - task: TerraformTaskV2@2
       displayName: 'Terraform Init (Validation Only)'
       inputs:
         provider: 'azurerm'
@@ -83,7 +83,7 @@ stages:
           use_msi=false
           use_azuread_auth=false
 
-    - task: TerraformTask@5
+    - task: TerraformTaskV2@2
       displayName: 'Terraform Format Check'
       inputs:
         provider: 'azurerm'
@@ -91,7 +91,7 @@ stages:
         workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
         commandOptions: '-check -recursive'
 
-    - task: TerraformTask@5
+    - task: TerraformTaskV2@2
       displayName: 'Terraform Validate'
       inputs:
         provider: 'azurerm'
