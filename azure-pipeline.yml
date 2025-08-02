@@ -80,8 +80,7 @@ stages:
         backendAzureRmContainerName: '$(container_name)'
         backendAzureRmKey: 'validation.tfstate'
         backendConfig: |
-          use_msi=false
-          use_azuread_auth=false
+          use_msi = false
 
     - task: TerraformTaskV2@2
       displayName: 'Terraform Format Check'

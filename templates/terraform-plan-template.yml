@@ -37,8 +37,7 @@ steps:
     backendAzureRmContainerName: '$(container_name)'
     backendAzureRmKey: '${{ parameters.environmentName }}.tfstate'
     backendConfig: |
-      use_msi=false
-      use_azuread_auth=false
+      use_msi = false
 
 - task: TerraformTaskV2@2
   displayName: 'Terraform Plan for ${{ parameters.environmentName }}'
