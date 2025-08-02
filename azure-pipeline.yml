@@ -78,7 +78,10 @@ stages:
         backendAzureRmResourceGroupName: '$(resource_group_name)'
         backendAzureRmStorageAccountName: '$(storage_account_name)'
         backendAzureRmContainerName: '$(container_name)'
-        backendAzureRmKey: 'validation.tfstate'  # Temporary key for validation
+        backendAzureRmKey: 'validation.tfstate'
+        backendConfig: |
+          use_msi=false
+          use_azuread_auth=false
 
     - task: TerraformTask@5
       displayName: 'Terraform Format Check'
