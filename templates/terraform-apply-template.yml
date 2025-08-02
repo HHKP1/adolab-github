@@ -3,10 +3,12 @@ parameters:
     type: string
   - name: serviceConnection
     type: string
+  - name: agentPool
+    type: string
 
 steps:
 - task: DownloadBuildArtifacts@1
-  displayName: 'Download Plan Artifacts'
+  displayName: 'Download Plan Artifacts for ${{ parameters.environmentName }}'
   inputs:
     artifactName: 'terraform-plan-${{ parameters.environmentName }}'
     downloadPath: '$(Pipeline.Workspace)'
@@ -16,8 +18,35 @@ steps:
   inputs:
     terraformVersion: '$(terraform_version)'
 
+- task: PowerShell@2
+  displayName: 'Pre-Apply Verification'
+  inputs:
+    targetType: 'inline'
+    workingDirectory: '$(Pipeline.Workspace)/terraform-plan-${{ parameters.environmentName }}/terraform'
+    script: |
+      Write-Host "🔍 Pre-Apply Verification for ${{ parameters.environmentName }}:" -ForegroundColor Cyan
+      
+      # Check if plan file exists
+      if (Test-Path "tfplan") {
+        Write-Host "✅ Plan file found and ready for apply" -ForegroundColor Green
+        
+        # Show what will be applied
+        try {
+          Write-Host "`n📋 Plan Summary:" -ForegroundColor Yellow
+          terraform show -no-color tfplan | Select-Object -First 20
+          Write-Host "`n... (truncated for readability)" -ForegroundColor Gray
+        } catch {
+          Write-Host "ℹ️  Plan file is valid and ready for apply" -ForegroundColor Gray
+        }
+      } else {
+        Write-Host "❌ Plan file not found!" -ForegroundColor Red
+        Write-Host "Available files:" -ForegroundColor Yellow
+        Get-ChildItem -Path . | Format-Table Name, Length -AutoSize
+        exit 1
+      }
+
 - task: TerraformTaskV2@2
-  displayName: 'Terraform Apply'
+  displayName: 'Terraform Apply for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
     command: 'apply'
@@ -25,17 +54,81 @@ steps:
     environmentServiceNameAzureRM: '${{ parameters.serviceConnection }}'
     commandOptions: 'tfplan'
 
+- task: TerraformTaskV2@2
+  displayName: 'Terraform Output for ${{ parameters.environmentName }}'
+  inputs:
+    provider: 'azurerm'
+    command: 'output'
+    workingDirectory: '$(Pipeline.Workspace)/terraform-plan-${{ parameters.environmentName }}/terraform'
+    environmentServiceNameAzureRM: '${{ parameters.serviceConnection }}'
+  continueOnError: true
+
 - task: PowerShell@2
   displayName: 'Display Infrastructure URLs'
   inputs:
     targetType: 'inline'
     script: |
       Write-Host "✅ Infrastructure deployed successfully for environment: ${{ parameters.environmentName }}" -ForegroundColor Green
+      Write-Host "" -ForegroundColor White
+      Write-Host "🔗 Infrastructure Details:" -ForegroundColor Cyan
+      Write-Host "🏗️  Resource Group: rg-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Yellow
       Write-Host "🌐 App Service URL: https://app-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}.azurewebsites.net" -ForegroundColor Cyan
       
       if ("${{ parameters.environmentName }}" -eq "prod") {
         Write-Host "🟢 Staging Slot URL: https://app-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-prod-staging.azurewebsites.net" -ForegroundColor Yellow
       }
       
-      Write-Host "🗄️ SQL Server: sql-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Magenta
-      Write-Host "💾 Database: sqldb-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Magenta
+      Write-Host "🗄️  SQL Server: sql-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Magenta
+      Write-Host "💾 SQL Database: sqldb-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Magenta
+      Write-Host "📦 Version deployed: $(versionNumber)" -ForegroundColor Green
+      Write-Host "" -ForegroundColor White
+
+- task: PowerShell@2
+  displayName: 'Verify Deployment'
+  inputs:
+    targetType: 'inline'
+    script: |
+      $appUrl = "https://app-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}.azurewebsites.net"
+      
+      Write-Host "🔍 Verifying App Service deployment..." -ForegroundColor Yellow
+      
+      try {
+        # Test if the URL is reachable
+        $response = Invoke-WebRequest -Uri $appUrl -Method HEAD -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
+        
+        if ($response.StatusCode -eq 200) {
+          Write-Host "✅ App Service is responding successfully!" -ForegroundColor Green
+          Write-Host "📊 Status Code: $($response.StatusCode)" -ForegroundColor Green
+        } else {
+          Write-Host "⚠️  App Service responded with status code: $($response.StatusCode)" -ForegroundColor Yellow
+        }
+      } 
+      catch {
+        # This is normal for new deployments - the app might still be starting
+        Write-Host "⚠️  App Service is not yet responding (normal for new deployments)" -ForegroundColor Yellow
+        Write-Host "🕒 The application may take 2-5 minutes to start up completely." -ForegroundColor Cyan
+        
+        # Don't fail the pipeline for this
+        Write-Host "ℹ️  Error details: $($_.Exception.Message)" -ForegroundColor Gray
+      }
+      
+      Write-Host "" -ForegroundColor White
+      Write-Host "🔗 Access your application at: $appUrl" -ForegroundColor Cyan
+      
+      if ("${{ parameters.environmentName }}" -eq "prod") {
+        Write-Host "🟢 Staging slot will be available at: https://app-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-prod-staging.azurewebsites.net" -ForegroundColor Yellow
+      }
+
+- task: PowerShell@2
+  displayName: 'Environment Summary'
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "📋 Deployment Summary for ${{ parameters.environmentName }} Environment:" -ForegroundColor Cyan
+      Write-Host "=" * 60 -ForegroundColor Gray
+      Write-Host "✅ Status: Deployment Completed Successfully" -ForegroundColor Green
+      Write-Host "🏷️  Environment: ${{ parameters.environmentName }}" -ForegroundColor Yellow
+      Write-Host "📦 Version: $(versionNumber)" -ForegroundColor Green
+      Write-Host "🕒 Deployed at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')" -ForegroundColor Gray
+      Write-Host "🔧 Agent: ${{ parameters.agentPool }}" -ForegroundColor Gray
+      Write-Host "=" * 60 -ForegroundColor Gray

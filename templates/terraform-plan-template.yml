@@ -3,6 +3,8 @@ parameters:
     type: string
   - name: serviceConnection
     type: string
+  - name: agentPool
+    type: string
 
 steps:
 - task: DownloadBuildArtifacts@1
@@ -16,6 +18,7 @@ steps:
   inputs:
     archiveFilePatterns: '$(System.DefaultWorkingDirectory)/iac-terraform/iac.terraform.$(Build.BuildNumber).zip'
     destinationFolder: '$(System.DefaultWorkingDirectory)/extracted'
+    cleanDestinationFolder: true
 
 - task: TerraformInstaller@0
   displayName: 'Install Terraform $(terraform_version)'
@@ -23,7 +26,7 @@ steps:
     terraformVersion: '$(terraform_version)'
 
 - task: TerraformTaskV2@2
-  displayName: 'Terraform Init'
+  displayName: 'Terraform Init for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
     command: 'init'
@@ -35,7 +38,7 @@ steps:
     backendAzureRmKey: '${{ parameters.environmentName }}.tfstate'
 
 - task: TerraformTaskV2@2
-  displayName: 'Terraform Plan'
+  displayName: 'Terraform Plan for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
     command: 'plan'
@@ -50,8 +53,39 @@ steps:
       -var="SQL_SERVER_ADMINISTRATOR_PASSWORD=$(SQL_SERVER_ADMINISTRATOR_PASSWORD)"
       -var="app_version=$(versionNumber)"
 
+- task: PowerShell@2
+  displayName: 'Display Terraform Plan Summary'
+  inputs:
+    targetType: 'inline'
+    workingDirectory: '$(System.DefaultWorkingDirectory)/extracted/terraform'
+    script: |
+      Write-Host "📋 Terraform Plan Summary for ${{ parameters.environmentName }} environment:" -ForegroundColor Cyan
+      Write-Host "🏗️  Resource Group: rg-adolearn-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Yellow
+      Write-Host "🌐 App Service: app-adolearn-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Yellow
+      Write-Host "🗄️  SQL Server: sql-adolearn-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Yellow
+      Write-Host "💾 SQL Database: sqldb-adolearn-$(RESOURCE_NAME_PREFIX)-$(LOCATION)-${{ parameters.environmentName }}" -ForegroundColor Yellow
+      Write-Host "📦 Version: $(versionNumber)" -ForegroundColor Green
+      
+      # Check if plan file exists
+      if (Test-Path "tfplan") {
+        Write-Host "`n📊 Plan file created successfully. Ready for approval and apply." -ForegroundColor Green
+        
+        # Try to show a basic plan summary (cross-platform compatible)
+        try {
+          $planOutput = terraform show -no-color tfplan
+          if ($planOutput -match "Plan: (\d+) to add, (\d+) to change, (\d+) to destroy") {
+            Write-Host "📈 Resources: $($matches[1]) to add, $($matches[2]) to change, $($matches[3]) to destroy" -ForegroundColor Magenta
+          }
+        } catch {
+          Write-Host "ℹ️  Plan details available for review in apply stage." -ForegroundColor Gray
+        }
+      } else {
+        Write-Host "⚠️  Plan file not found!" -ForegroundColor Red
+        exit 1
+      }
+
 - task: PublishBuildArtifacts@1
-  displayName: 'Publish Plan Artifacts'
+  displayName: 'Publish Plan Artifacts for ${{ parameters.environmentName }}'
   inputs:
     pathToPublish: '$(System.DefaultWorkingDirectory)/extracted'
     artifactName: 'terraform-plan-${{ parameters.environmentName }}'
