@@ -25,7 +25,7 @@ steps:
   inputs:
     terraformVersion: '$(terraform_version)'
 
-- task: TerraformTask@5
+- task: TerraformTaskV2@2
   displayName: 'Terraform Init for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
@@ -40,7 +40,7 @@ steps:
       use_msi=false
       use_azuread_auth=false
 
-- task: TerraformTask@5
+- task: TerraformTaskV2@2
   displayName: 'Terraform Plan for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
