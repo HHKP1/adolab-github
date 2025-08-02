@@ -62,13 +62,13 @@ stages:
         filePath: 'scripts/update-build-number.ps1'
         arguments: '-BuildId $(Build.BuildId)'
 
-    - task: TerraformInstaller@0
+    - task: TerraformInstaller@1
       displayName: 'Install Terraform $(terraform_version)'
       inputs:
         terraformVersion: '$(terraform_version)'
 
     # Terraform validation with minimal backend config
-    - task: TerraformTaskV2@2
+    - task: TerraformTask@5
       displayName: 'Terraform Init (Validation Only)'
       inputs:
         provider: 'azurerm'
@@ -86,7 +86,7 @@ stages:
       displayName: 'Terraform Format Check (Script)'
       workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
 
-    - task: TerraformTaskV2@2
+    - task: TerraformTask@5
       displayName: 'Terraform Validate'
       inputs:
         provider: 'azurerm'

@@ -20,12 +20,12 @@ steps:
     destinationFolder: '$(System.DefaultWorkingDirectory)/extracted'
     cleanDestinationFolder: true
 
-- task: TerraformInstaller@0
+- task: TerraformInstaller@1
   displayName: 'Install Terraform $(terraform_version)'
   inputs:
     terraformVersion: '$(terraform_version)'
 
-- task: TerraformTaskV2@2
+- task: TerraformTask@5
   displayName: 'Terraform Init for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
@@ -37,7 +37,7 @@ steps:
     backendAzureRmContainerName: '$(container_name)'
     backendAzureRmKey: '${{ parameters.environmentName }}.tfstate'
 
-- task: TerraformTaskV2@2
+- task: TerraformTask@5
   displayName: 'Terraform Plan for ${{ parameters.environmentName }}'
   inputs:
     provider: 'azurerm'
