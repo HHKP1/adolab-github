@@ -79,6 +79,8 @@ stages:
         backendAzureRmStorageAccountName: '$(storage_account_name)'
         backendAzureRmContainerName: '$(container_name)'
         backendAzureRmKey: 'validation.tfstate'
+        backendConfig: |
+          use_msi = false
 
     - script: |
         echo "##[command]terraform fmt -check -recursive"
