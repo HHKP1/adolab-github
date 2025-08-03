@@ -1,5 +1,10 @@
 name: 'Infra-CI-CD-$(Date:yyyy.MM.dd)$(Rev:.r)'
 
+resources:
+  connections:
+  - connection: azure-subscription
+    type: azurerm
+
 parameters:
   - name: agentPool
     type: string
