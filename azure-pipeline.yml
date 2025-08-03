@@ -79,6 +79,14 @@ stages:
         backendAzureRmStorageAccountName: '$(storage_account_name)'
         backendAzureRmContainerName: '$(container_name)'
         backendAzureRmKey: 'validation.tfstate'
+    - script: |
+        echo "##[section]Contents of $(System.DefaultWorkingDirectory):"
+        dir "$(System.DefaultWorkingDirectory)"
+        echo "##[section]Contents of $(System.DefaultWorkingDirectory)/terraform:"
+        dir "$(System.DefaultWorkingDirectory)/terraform"
+        # If you want to see the file contents as well:
+        # type "$(System.DefaultWorkingDirectory)/terraform/*.tf"
+      displayName: 'Debug: List Terraform Files'
 
     - task: TerraformTaskV2@2
       displayName: 'Terraform Format Check'
