@@ -3,12 +3,12 @@ name: 'Infra-CI-CD-$(Date:yyyy.MM.dd)$(Rev:.r)'
 parameters:
   - name: agentPool
     type: string
-    default: 'self-hosted-pool'  # For your local testing
+    default: 'self-hosted-pool'  # For local testing
     displayName: 'Agent Pool Selection'
     values:
-      - self-hosted-pool    # Your local machine
-      - windows-latest      # Microsoft-hosted Windows
-      - ubuntu-latest       # Microsoft-hosted Linux
+      - self-hosted-pool
+      - windows-latest
+      - ubuntu-latest
 
 trigger:
   branches:
@@ -79,16 +79,12 @@ stages:
         backendAzureRmStorageAccountName: '$(storage_account_name)'
         backendAzureRmContainerName: '$(container_name)'
         backendAzureRmKey: 'validation.tfstate'
-        backendConfig: |
-          use_msi = false
 
-    - task: TerraformTaskV2@2
-      displayName: 'Terraform Format Check'
-      inputs:
-        provider: 'azurerm'
-        command: 'fmt'
-        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        commandOptions: '-check -recursive'
+    - script: |
+        echo "##[command]terraform fmt -check -recursive"
+        terraform fmt -check -recursive
+      displayName: 'Terraform Format Check (Script)'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
 
     - task: TerraformTaskV2@2
       displayName: 'Terraform Validate'
