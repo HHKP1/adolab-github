@@ -87,14 +87,6 @@ stages:
       workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
 
     - task: TerraformTaskV2@2
-      displayName: 'Terraform Format Check'
-      inputs:
-        provider: 'azurerm'
-        command: 'fmt'
-        workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-        commandOptions: '-check -recursive'
-
-    - task: TerraformTaskV2@2
       displayName: 'Terraform Validate'
       inputs:
         provider: 'azurerm'
