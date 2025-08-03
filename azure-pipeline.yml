@@ -79,13 +79,12 @@ stages:
         backendAzureRmStorageAccountName: '$(storage_account_name)'
         backendAzureRmContainerName: '$(container_name)'
         backendAzureRmKey: 'validation.tfstate'
+
     - script: |
-        echo "##[section]CONTENTS OF $(System.DefaultWorkingDirectory):"
-        dir "$(System.DefaultWorkingDirectory)"
-        echo "##[section]CONTENTS OF $(System.DefaultWorkingDirectory)/terraform:"
-        dir "$(System.DefaultWorkingDirectory)/terraform"
-        type "$(System.DefaultWorkingDirectory)/terraform/*.tf"
-      displayName: 'Debug: List Terraform Files'
+        echo "##[command]terraform fmt -check -recursive"
+        terraform fmt -check -recursive
+      displayName: 'Terraform Format Check (Script)'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
 
     - task: TerraformTaskV2@2
       displayName: 'Terraform Format Check'
