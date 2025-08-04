@@ -1,4 +1,3 @@
-### Variables that should be specified
 variable "LOCATION" {
   description = "Azure region for resources"
   type        = string
@@ -55,22 +54,22 @@ variable "sql_server_firewall_rules" {
   }
 }
 
-variable "edition" {
-  description = "SQL Database edition"
-  type        = string
-  default     = "Basic"
-}
-
 variable "collation" {
   description = "SQL Database collation"
   type        = string
   default     = "SQL_Latin1_General_CP1_CI_AS"
 }
 
-variable "max_size_bytes" {
-  description = "SQL Database max size in bytes"
+variable "max_size_gb" {
+  description = "SQL Database max size in GB"
+  type        = number
+  default     = 1
+}
+
+variable "database_sku_name" {
+  description = "SQL Database SKU name"
   type        = string
-  default     = "104857600"
+  default     = "Basic"
 }
 
 variable "zone_redundant" {
@@ -79,20 +78,8 @@ variable "zone_redundant" {
   default     = false
 }
 
-variable "kind" {
-  description = "App Service Plan kind"
-  type        = string
-  default     = "Windows"
-}
-
-variable "sku_tier" {
-  description = "App Service Plan SKU tier"
-  type        = string
-  default     = "Standard"
-}
-
-variable "sku_size" {
-  description = "App Service Plan SKU size"
+variable "sku_name" {
+  description = "App Service Plan SKU name (replaces tier/size combination)"
   type        = string
   default     = "S1"
 }
