@@ -5,7 +5,7 @@ terraform {
       version = ">=3.0"
     }
   }
-  required_version = ">= 1.0.4"
+  required_version = ">= 1.0"
 
   backend "azurerm" {
     # Configuration will be provided via pipeline
