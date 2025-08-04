@@ -79,6 +79,13 @@ stages:
         backendAzureRmStorageAccountName: '$(storage_account_name)'
         backendAzureRmContainerName: '$(container_name)'
         backendAzureRmKey: 'validation.tfstate'
+        commandOptions: '-reconfigure'
+
+    - script: |
+        echo "##[command]terraform fmt -check -recursive"
+        terraform fmt -check -recursive
+      displayName: 'Terraform Format Check (Script)'
+      workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
 
     - script: |
         echo "##[command]terraform fmt -check -recursive"
